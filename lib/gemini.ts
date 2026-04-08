@@ -20,33 +20,56 @@ const generationConfig = {
   temperature: 0.1,
   topP: 0.8,
   topK: 40,
-  maxOutputTokens: 2048,
+  maxOutputTokens: 4096,
+}
+
+function cleanResponseText(text: string): string {
+  // Remove <think>...</think> blocks (Gemini 2.5 thinking tokens)
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '')
+  // Remove markdown code blocks: ```json ... ``` or ``` ... ```
+  cleaned = cleaned.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1')
+  return cleaned.trim()
 }
 
 function extractJSON(text: string): GeminiResponse | null {
+  const cleaned = cleanResponseText(text)
+
+  // Try direct parse
   try {
-    // Try direct parse first
-    return JSON.parse(text)
-  } catch {
-    // Try to extract JSON from text
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0])
-      } catch {
-        return null
-      }
-    }
-    return null
+    const parsed = JSON.parse(cleaned)
+    if (parsed && typeof parsed === 'object') return parsed
+  } catch {}
+
+  // Try to extract the first { ... } block
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[0])
+    } catch {}
   }
+
+  // Last resort: try the original text with same approach
+  try {
+    return JSON.parse(text)
+  } catch {}
+
+  const fallbackMatch = text.match(/\{[\s\S]*\}/)
+  if (fallbackMatch) {
+    try {
+      return JSON.parse(fallbackMatch[0])
+    } catch {}
+  }
+
+  return null
 }
 
 function buildFallbackResponse(text: string): GeminiResponse {
+  const cleaned = cleanResponseText(text)
   return {
-    answer: text || 'Não foi possível processar a resposta.',
+    answer: cleaned || 'Não foi possível processar a resposta.',
     confidence: 50,
-    sources: ['Resposta gerada por IA'],
-    confidence_label: 'Confiança moderada - formato de resposta não estruturado',
+    sources: ['Gemini AI'],
+    confidence_label: 'Confiança moderada',
     has_image_analysis: false,
   }
 }
@@ -59,10 +82,8 @@ export async function queryGemini(
 ): Promise<GeminiResponse> {
   const genAI = new GoogleGenerativeAI(apiKey)
 
-  const modelName = 'gemini-2.5-flash'
-
   const model = genAI.getGenerativeModel({
-    model: modelName,
+    model: 'gemini-2.5-flash',
     safetySettings,
     generationConfig,
     systemInstruction: SYSTEM_PROMPT,
@@ -74,12 +95,7 @@ export async function queryGemini(
   if (imageBase64 && imageMimeType) {
     result = await model.generateContent([
       userMessage,
-      {
-        inlineData: {
-          data: imageBase64,
-          mimeType: imageMimeType,
-        },
-      },
+      { inlineData: { data: imageBase64, mimeType: imageMimeType } },
     ])
   } else {
     result = await model.generateContent(userMessage)
@@ -90,7 +106,6 @@ export async function queryGemini(
   const parsed = extractJSON(responseText)
 
   if (parsed && typeof parsed.answer === 'string' && typeof parsed.confidence === 'number') {
-    // Validate and clamp confidence
     parsed.confidence = Math.max(0, Math.min(100, parsed.confidence))
     if (!Array.isArray(parsed.sources) || parsed.sources.length === 0) {
       parsed.sources = ['Gemini AI']

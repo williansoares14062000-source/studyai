@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, KeyboardEvent } from 'react'
+import { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
 import { Paperclip, Send, X } from 'lucide-react'
 
 interface InputBarProps {
@@ -11,27 +11,48 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
   const [text, setText] = useState('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [pasteHint, setPasteHint] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      alert('Por favor, selecione apenas imagens.')
-      return
-    }
-
+  const applyImage = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) return
     if (file.size > 10 * 1024 * 1024) {
       alert('Imagem muito grande. Máximo 10MB.')
       return
     }
-
     setSelectedImage(file)
     const reader = new FileReader()
     reader.onload = (e) => setImagePreview(e.target?.result as string)
     reader.readAsDataURL(file)
+  }, [])
+
+  // Global Ctrl+V paste listener
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) {
+            applyImage(file)
+            // Show brief hint
+            setPasteHint(true)
+            setTimeout(() => setPasteHint(false), 2000)
+            textareaRef.current?.focus()
+          }
+          break
+        }
+      }
+    }
+    window.addEventListener('paste', handleGlobalPaste)
+    return () => window.removeEventListener('paste', handleGlobalPaste)
+  }, [applyImage])
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) applyImage(file)
   }
 
   const handleSend = () => {
@@ -55,7 +76,6 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value)
-    // Auto-resize
     e.target.style.height = 'auto'
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
   }
@@ -77,6 +97,12 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
           >
             <X size={12} />
           </button>
+        </div>
+      )}
+
+      {pasteHint && (
+        <div className="text-xs text-[#128C7E] font-medium mb-1 ml-1 animate-pulse">
+          Imagem colada!
         </div>
       )}
 
@@ -103,7 +129,7 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
-          placeholder={selectedImage ? 'Faça uma pergunta sobre a imagem...' : 'Escreva sua pergunta...'}
+          placeholder={selectedImage ? 'Faça uma pergunta sobre a imagem...' : 'Escreva sua pergunta... (Ctrl+V para colar print)'}
           disabled={disabled}
           rows={1}
           className="flex-1 bg-white rounded-2xl px-4 py-2 text-sm outline-none resize-none min-h-[40px] max-h-[120px] border border-gray-200 focus:border-[#128C7E] transition-colors disabled:opacity-50"
@@ -121,7 +147,7 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
       </div>
 
       <p className="text-[10px] text-gray-400 text-center mt-1">
-        Enter para enviar • Shift+Enter para nova linha
+        Enter para enviar • Shift+Enter para nova linha • Ctrl+V para colar print
       </p>
     </div>
   )

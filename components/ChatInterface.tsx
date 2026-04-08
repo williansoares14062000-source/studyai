@@ -2,28 +2,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import MessageBubble, { Message } from './MessageBubble'
 import InputBar from './InputBar'
-import { BookOpen, Settings, X, Trash2 } from 'lucide-react'
+import { BookOpen, Trash2 } from 'lucide-react'
 
 const STORAGE_KEY = 'study_assistant_messages'
-const API_KEY_STORAGE = 'gemini_api_key'
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  const [showSettings, setShowSettings] = useState(false)
-  const [tempApiKey, setTempApiKey] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const savedKey = localStorage.getItem(API_KEY_STORAGE) || ''
-    setApiKey(savedKey)
-    setTempApiKey(savedKey)
-
-    if (!savedKey) {
-      setShowSettings(true)
-    }
-
     const savedMessages = localStorage.getItem(STORAGE_KEY)
     if (savedMessages) {
       try {
@@ -43,14 +31,6 @@ export default function ChatInterface() {
     }
   }, [messages])
 
-  const saveApiKey = () => {
-    const key = tempApiKey.trim()
-    if (!key) return
-    setApiKey(key)
-    localStorage.setItem(API_KEY_STORAGE, key)
-    setShowSettings(false)
-  }
-
   const clearChat = () => {
     if (confirm('Limpar todo o histórico?')) {
       setMessages([])
@@ -59,11 +39,6 @@ export default function ChatInterface() {
   }
 
   const handleSend = useCallback(async (text: string, imageFile?: File) => {
-    if (!apiKey) {
-      setShowSettings(true)
-      return
-    }
-
     let imageBase64: string | undefined
     let imageMimeType: string | undefined
     let imageUrl: string | undefined
@@ -78,7 +53,7 @@ export default function ChatInterface() {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      text: text || (imageFile ? '📷 Imagem enviada para análise' : ''),
+      text: text || (imageFile ? 'Imagem enviada para análise' : ''),
       imageUrl,
       timestamp: new Date(),
     }
@@ -90,7 +65,7 @@ export default function ChatInterface() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text, imageBase64, imageMimeType, apiKey }),
+        body: JSON.stringify({ question: text, imageBase64, imageMimeType }),
       })
 
       const data = await response.json()
@@ -122,7 +97,7 @@ export default function ChatInterface() {
     } finally {
       setIsLoading(false)
     }
-  }, [apiKey])
+  }, [])
 
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-lg">
@@ -137,61 +112,14 @@ export default function ChatInterface() {
             <p className="text-xs text-white/70">Powered by Gemini AI</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={clearChat}
-            className="text-white/70 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors"
-            title="Limpar conversa"
-          >
-            <Trash2 size={18} />
-          </button>
-          <button
-            onClick={() => { setTempApiKey(apiKey); setShowSettings(true) }}
-            className="text-white/70 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors"
-            title="Configurações"
-          >
-            <Settings size={18} />
-          </button>
-        </div>
+        <button
+          onClick={clearChat}
+          className="text-white/70 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors"
+          title="Limpar conversa"
+        >
+          <Trash2 size={18} />
+        </button>
       </div>
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-gray-800">Configurar API Key</h2>
-              {apiKey && (
-                <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600">
-                  <X size={20} />
-                </button>
-              )}
-            </div>
-            <p className="text-sm text-gray-500 mb-3">
-              Insira sua chave da API do Google Gemini. Ela fica salva apenas no seu dispositivo.
-            </p>
-            <input
-              type="password"
-              value={tempApiKey}
-              onChange={(e) => setTempApiKey(e.target.value)}
-              placeholder="AIza..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:border-[#128C7E]"
-              onKeyDown={(e) => e.key === 'Enter' && saveApiKey()}
-              autoFocus
-            />
-            <button
-              onClick={saveApiKey}
-              disabled={!tempApiKey.trim()}
-              className="w-full bg-[#128C7E] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#0e7269] disabled:opacity-50 transition-colors"
-            >
-              Salvar
-            </button>
-            <p className="text-[11px] text-gray-400 text-center mt-2">
-              A chave não é enviada para nenhum servidor externo além do Google.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Messages */}
       <div
@@ -210,6 +138,7 @@ export default function ChatInterface() {
             <div className="mt-4 text-xs text-gray-400 space-y-1">
               <p>📝 Digite sua dúvida</p>
               <p>📷 Envie um print ou foto</p>
+              <p>🖼️ Cole um print com Ctrl+V</p>
               <p>✅ Receba resposta com % de precisão</p>
             </div>
           </div>
