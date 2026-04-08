@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 import { SYSTEM_PROMPT, buildUserMessage } from './prompts'
 
 export interface GeminiResponse {
+  short_answer?: string
   answer: string
   confidence: number
   sources: string[]

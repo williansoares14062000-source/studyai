@@ -78,6 +78,7 @@ export default function ChatInterface() {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         text: data.answer,
+        shortAnswer: data.short_answer,
         confidence: data.confidence,
         sources: data.sources,
         confidence_label: data.confidence_label,
