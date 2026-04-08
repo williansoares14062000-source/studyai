@@ -72,7 +72,7 @@ export default function ChatInterface() {
       imageMimeType = imageFile.type
       imageUrl = URL.createObjectURL(imageFile)
       const buffer = await imageFile.arrayBuffer()
-      imageBase64 = btoa(String.fromCharCode(...new Uint8Array(buffer)))
+      imageBase64 = btoa(Array.from(new Uint8Array(buffer), b => String.fromCharCode(b)).join(''))
     }
 
     const userMessage: Message = {
