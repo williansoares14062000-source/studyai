@@ -99,12 +99,13 @@ function extractGroundingSources(result: any): string[] {
   }
 }
 
-export async function queryGemini(
+async function callGemini(
   apiKey: string,
   question: string,
   imageBase64?: string,
-  imageMimeType?: string
-): Promise<GeminiResponse> {
+  imageMimeType?: string,
+  useGrounding = true
+) {
   const genAI = new GoogleGenerativeAI(apiKey)
 
   const model = genAI.getGenerativeModel({
@@ -112,29 +113,42 @@ export async function queryGemini(
     safetySettings,
     generationConfig,
     systemInstruction: SYSTEM_PROMPT,
-    tools: [{ googleSearchRetrieval: {} }],
+    ...(useGrounding ? { tools: [{ googleSearchRetrieval: {} }] } : {}),
   })
 
   const userMessage = buildUserMessage(question, !!imageBase64)
 
-  let result
   if (imageBase64 && imageMimeType) {
-    result = await model.generateContent([
+    return model.generateContent([
       userMessage,
       { inlineData: { data: imageBase64, mimeType: imageMimeType } },
     ])
-  } else {
-    result = await model.generateContent(userMessage)
+  }
+  return model.generateContent(userMessage)
+}
+
+export async function queryGemini(
+  apiKey: string,
+  question: string,
+  imageBase64?: string,
+  imageMimeType?: string
+): Promise<GeminiResponse> {
+  let result: any
+  let groundingSources: string[] = []
+
+  try {
+    result = await callGemini(apiKey, question, imageBase64, imageMimeType, true)
+    groundingSources = extractGroundingSources(result)
+  } catch (groundingError: any) {
+    console.warn('Grounding failed, retrying without it:', groundingError?.message)
+    result = await callGemini(apiKey, question, imageBase64, imageMimeType, false)
   }
 
   const responseText = result.response.text().trim()
-  const groundingSources = extractGroundingSources(result)
-
   const parsed = extractJSON(responseText)
 
   if (parsed && typeof parsed.answer === 'string' && typeof parsed.confidence === 'number') {
     parsed.confidence = Math.max(0, Math.min(100, parsed.confidence))
-    // Always prefer real grounding sources over model-generated ones
     if (groundingSources.length > 0) {
       parsed.sources = groundingSources
     } else if (!Array.isArray(parsed.sources) || parsed.sources.length === 0) {

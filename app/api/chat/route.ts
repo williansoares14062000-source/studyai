@@ -25,16 +25,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(response)
   } catch (error: any) {
-    console.error('Gemini API error:', error)
+    const message = error?.message || String(error)
+    console.error('Gemini API error:', message)
 
-    if (error?.message?.includes('API_KEY_INVALID')) {
-      return NextResponse.json(
-        { error: 'API Key inválida.' },
-        { status: 401 }
-      )
+    if (message.includes('API_KEY_INVALID')) {
+      return NextResponse.json({ error: 'API Key inválida.' }, { status: 401 })
     }
-
-    if (error?.message?.includes('RATE_LIMIT') || error?.message?.includes('429')) {
+    if (message.includes('RATE_LIMIT') || message.includes('429')) {
       return NextResponse.json(
         { error: 'Limite de requisições atingido. Aguarde um momento.' },
         { status: 429 }
@@ -42,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: 'Erro ao processar resposta. Tente novamente.' },
+      { error: `Erro: ${message}` },
       { status: 500 }
     )
   }
