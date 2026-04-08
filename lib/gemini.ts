@@ -37,13 +37,11 @@ function cleanResponseText(text: string): string {
 function extractJSON(text: string): GeminiResponse | null {
   const cleaned = cleanResponseText(text)
 
-  // Try direct parse
   try {
     const parsed = JSON.parse(cleaned)
     if (parsed && typeof parsed === 'object') return parsed
   } catch {}
 
-  // Try to extract the outermost { ... } block (greedy to get full object)
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
   if (jsonMatch) {
     try {
@@ -51,7 +49,6 @@ function extractJSON(text: string): GeminiResponse | null {
     } catch {}
   }
 
-  // Try on original text
   try {
     return JSON.parse(text)
   } catch {}
@@ -66,14 +63,39 @@ function extractJSON(text: string): GeminiResponse | null {
   return null
 }
 
-function buildFallbackResponse(text: string): GeminiResponse {
+function buildFallbackResponse(text: string, groundingSources: string[]): GeminiResponse {
   const cleaned = cleanResponseText(text)
   return {
     answer: cleaned || 'Não foi possível processar a resposta.',
     confidence: 50,
-    sources: ['Gemini AI'],
+    sources: groundingSources.length > 0 ? groundingSources : ['Gemini AI'],
     confidence_label: 'Confiança moderada',
     has_image_analysis: false,
+  }
+}
+
+function extractGroundingSources(result: any): string[] {
+  try {
+    const candidates = result.response?.candidates ?? []
+    const groundingMetadata = candidates[0]?.groundingMetadata
+    if (!groundingMetadata) return []
+
+    const chunks: string[] = []
+
+    for (const chunk of groundingMetadata.groundingChunks ?? []) {
+      const web = chunk.web
+      if (web?.title && web?.uri) {
+        chunks.push(`${web.title} (${web.uri})`)
+      } else if (web?.uri) {
+        chunks.push(web.uri)
+      } else if (web?.title) {
+        chunks.push(web.title)
+      }
+    }
+
+    return chunks
+  } catch {
+    return []
   }
 }
 
@@ -90,6 +112,7 @@ export async function queryGemini(
     safetySettings,
     generationConfig,
     systemInstruction: SYSTEM_PROMPT,
+    tools: [{ googleSearchRetrieval: {} }],
   })
 
   const userMessage = buildUserMessage(question, !!imageBase64)
@@ -105,16 +128,20 @@ export async function queryGemini(
   }
 
   const responseText = result.response.text().trim()
+  const groundingSources = extractGroundingSources(result)
 
   const parsed = extractJSON(responseText)
 
   if (parsed && typeof parsed.answer === 'string' && typeof parsed.confidence === 'number') {
     parsed.confidence = Math.max(0, Math.min(100, parsed.confidence))
-    if (!Array.isArray(parsed.sources) || parsed.sources.length === 0) {
+    // Always prefer real grounding sources over model-generated ones
+    if (groundingSources.length > 0) {
+      parsed.sources = groundingSources
+    } else if (!Array.isArray(parsed.sources) || parsed.sources.length === 0) {
       parsed.sources = ['Gemini AI']
     }
     return parsed
   }
 
-  return buildFallbackResponse(responseText)
+  return buildFallbackResponse(responseText, groundingSources)
 }
