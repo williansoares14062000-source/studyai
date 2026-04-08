@@ -21,14 +21,16 @@ const generationConfig = {
   temperature: 0.1,
   topP: 0.8,
   topK: 40,
-  maxOutputTokens: 4096,
+  maxOutputTokens: 16384,
 }
 
 function cleanResponseText(text: string): string {
   // Remove <think>...</think> blocks (Gemini 2.5 thinking tokens)
   let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '')
-  // Remove markdown code blocks: ```json ... ``` or ``` ... ```
+  // Remove markdown code blocks with closing ```
   cleaned = cleaned.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1')
+  // Remove opening ``` without closing (truncated response)
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '')
   return cleaned.trim()
 }
 
@@ -41,7 +43,7 @@ function extractJSON(text: string): GeminiResponse | null {
     if (parsed && typeof parsed === 'object') return parsed
   } catch {}
 
-  // Try to extract the first { ... } block
+  // Try to extract the outermost { ... } block (greedy to get full object)
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
   if (jsonMatch) {
     try {
@@ -49,7 +51,7 @@ function extractJSON(text: string): GeminiResponse | null {
     } catch {}
   }
 
-  // Last resort: try the original text with same approach
+  // Try on original text
   try {
     return JSON.parse(text)
   } catch {}

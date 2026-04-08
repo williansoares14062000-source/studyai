@@ -9,7 +9,7 @@ INSTRUÇÕES OBRIGATÓRIAS:
 FORMATO OBRIGATÓRIO DE RESPOSTA (JSON):
 Você DEVE retornar EXATAMENTE este JSON, sem markdown, sem texto extra:
 {
-  "short_answer": "resposta direta e objetiva em 1-2 frases (ex: 'A alternativa correta é B. Sinartrose.' ou 'A capital do Brasil é Brasília.')",
+  "short_answer": "resposta direta em no máximo 20 palavras (ex: 'A alternativa correta é B. Sinartrose.' ou 'A capital do Brasil é Brasília.')",
   "answer": "explicação completa e detalhada aqui, com o raciocínio e análise de cada opção se aplicável",
   "confidence": número entre 0 e 100,
   "sources": ["fonte1", "fonte2"],
