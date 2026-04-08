@@ -19,17 +19,12 @@ const safetySettings = [
 
 const generationConfig = {
   temperature: 0.1,
-  topP: 0.8,
-  topK: 40,
   maxOutputTokens: 16384,
 }
 
 function cleanResponseText(text: string): string {
-  // Remove <think>...</think> blocks (Gemini 2.5 thinking tokens)
   let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '')
-  // Remove markdown code blocks with closing ```
   cleaned = cleaned.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1')
-  // Remove opening ``` without closing (truncated response)
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '')
   return cleaned.trim()
 }
@@ -63,68 +58,15 @@ function extractJSON(text: string): GeminiResponse | null {
   return null
 }
 
-function buildFallbackResponse(text: string, groundingSources: string[]): GeminiResponse {
+function buildFallbackResponse(text: string): GeminiResponse {
   const cleaned = cleanResponseText(text)
   return {
     answer: cleaned || 'Não foi possível processar a resposta.',
     confidence: 50,
-    sources: groundingSources.length > 0 ? groundingSources : ['Gemini AI'],
+    sources: [],
     confidence_label: 'Confiança moderada',
     has_image_analysis: false,
   }
-}
-
-function extractGroundingSources(result: any): string[] {
-  try {
-    const candidates = result.response?.candidates ?? []
-    const groundingMetadata = candidates[0]?.groundingMetadata
-    if (!groundingMetadata) return []
-
-    const chunks: string[] = []
-
-    for (const chunk of groundingMetadata.groundingChunks ?? []) {
-      const web = chunk.web
-      if (web?.title && web?.uri) {
-        chunks.push(`${web.title} (${web.uri})`)
-      } else if (web?.uri) {
-        chunks.push(web.uri)
-      } else if (web?.title) {
-        chunks.push(web.title)
-      }
-    }
-
-    return chunks
-  } catch {
-    return []
-  }
-}
-
-async function callGemini(
-  apiKey: string,
-  question: string,
-  imageBase64?: string,
-  imageMimeType?: string,
-  useGrounding = true
-) {
-  const genAI = new GoogleGenerativeAI(apiKey)
-
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    safetySettings,
-    generationConfig,
-    systemInstruction: SYSTEM_PROMPT,
-    ...(useGrounding ? { tools: [{ googleSearchRetrieval: {} }] } : {}),
-  })
-
-  const userMessage = buildUserMessage(question, !!imageBase64)
-
-  if (imageBase64 && imageMimeType) {
-    return model.generateContent([
-      userMessage,
-      { inlineData: { data: imageBase64, mimeType: imageMimeType } },
-    ])
-  }
-  return model.generateContent(userMessage)
 }
 
 export async function queryGemini(
@@ -133,15 +75,25 @@ export async function queryGemini(
   imageBase64?: string,
   imageMimeType?: string
 ): Promise<GeminiResponse> {
-  let result: any
-  let groundingSources: string[] = []
+  const genAI = new GoogleGenerativeAI(apiKey)
 
-  try {
-    result = await callGemini(apiKey, question, imageBase64, imageMimeType, true)
-    groundingSources = extractGroundingSources(result)
-  } catch (groundingError: any) {
-    console.warn('Grounding failed, retrying without it:', groundingError?.message)
-    result = await callGemini(apiKey, question, imageBase64, imageMimeType, false)
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    safetySettings,
+    generationConfig,
+    systemInstruction: SYSTEM_PROMPT,
+  })
+
+  const userMessage = buildUserMessage(question, !!imageBase64)
+
+  let result
+  if (imageBase64 && imageMimeType) {
+    result = await model.generateContent([
+      userMessage,
+      { inlineData: { data: imageBase64, mimeType: imageMimeType } },
+    ])
+  } else {
+    result = await model.generateContent(userMessage)
   }
 
   const responseText = result.response.text().trim()
@@ -149,13 +101,11 @@ export async function queryGemini(
 
   if (parsed && typeof parsed.answer === 'string' && typeof parsed.confidence === 'number') {
     parsed.confidence = Math.max(0, Math.min(100, parsed.confidence))
-    if (groundingSources.length > 0) {
-      parsed.sources = groundingSources
-    } else if (!Array.isArray(parsed.sources) || parsed.sources.length === 0) {
-      parsed.sources = ['Gemini AI']
+    if (!Array.isArray(parsed.sources) || parsed.sources.length === 0) {
+      parsed.sources = []
     }
     return parsed
   }
 
-  return buildFallbackResponse(responseText, groundingSources)
+  return buildFallbackResponse(responseText)
 }
