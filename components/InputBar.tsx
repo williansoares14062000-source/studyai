@@ -1,6 +1,6 @@
 'use client'
-import { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
-import { Paperclip, Send, X } from 'lucide-react'
+import { useState, useRef, KeyboardEvent, useCallback } from 'react'
+import { Camera, Paperclip, Send, X } from 'lucide-react'
 
 interface InputBarProps {
   onSend: (text: string, imageFile?: File) => void
@@ -11,8 +11,8 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
   const [text, setText] = useState('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [pasteHint, setPasteHint] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const applyImage = useCallback((file: File) => {
@@ -26,29 +26,6 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
     reader.onload = (e) => setImagePreview(e.target?.result as string)
     reader.readAsDataURL(file)
   }, [])
-
-  // Global Ctrl+V paste listener
-  useEffect(() => {
-    const handleGlobalPaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items
-      if (!items) return
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile()
-          if (file) {
-            applyImage(file)
-            // Show brief hint
-            setPasteHint(true)
-            setTimeout(() => setPasteHint(false), 2000)
-            textareaRef.current?.focus()
-          }
-          break
-        }
-      }
-    }
-    window.addEventListener('paste', handleGlobalPaste)
-    return () => window.removeEventListener('paste', handleGlobalPaste)
-  }, [applyImage])
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -100,17 +77,19 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
         </div>
       )}
 
-      {pasteHint && (
-        <div className="text-xs text-[#128C7E] font-medium mb-1 ml-1 animate-pulse">
-          Imagem colada!
-        </div>
-      )}
-
       <div className="flex items-end gap-2">
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
           className="hidden"
           onChange={handleImageSelect}
         />
@@ -124,12 +103,21 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
           <Paperclip size={22} />
         </button>
 
+        <button
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={disabled}
+          className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-200 transition-colors disabled:opacity-50 flex-shrink-0"
+          title="Tirar foto"
+        >
+          <Camera size={22} />
+        </button>
+
         <textarea
           ref={textareaRef}
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
-          placeholder={selectedImage ? 'Faça uma pergunta sobre a imagem...' : 'Escreva sua pergunta... (Ctrl+V para colar print)'}
+          placeholder={selectedImage ? 'Faça uma pergunta sobre a imagem...' : 'Escreva sua pergunta...'}
           disabled={disabled}
           rows={1}
           className="flex-1 bg-white rounded-2xl px-4 py-2 text-sm outline-none resize-none min-h-[40px] max-h-[120px] border border-gray-200 focus:border-[#128C7E] transition-colors disabled:opacity-50"
@@ -147,7 +135,7 @@ export default function InputBar({ onSend, disabled }: InputBarProps) {
       </div>
 
       <p className="text-[10px] text-gray-400 text-center mt-1">
-        Enter para enviar • Shift+Enter para nova linha • Ctrl+V para colar print
+        Enter para enviar • Shift+Enter para nova linha
       </p>
     </div>
   )

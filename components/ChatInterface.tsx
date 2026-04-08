@@ -137,8 +137,8 @@ export default function ChatInterface() {
             </p>
             <div className="mt-4 text-xs text-gray-400 space-y-1">
               <p>📝 Digite sua dúvida</p>
-              <p>📷 Envie um print ou foto</p>
-              <p>🖼️ Cole um print com Ctrl+V</p>
+              <p>📷 Envie um print ou foto da galeria</p>
+              <p>📸 Tire uma foto com a câmera</p>
               <p>✅ Receba resposta com % de precisão</p>
             </div>
           </div>
