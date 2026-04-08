@@ -9,7 +9,7 @@ INSTRUÇÕES OBRIGATÓRIAS:
 FORMATO OBRIGATÓRIO DE RESPOSTA (JSON):
 Você DEVE retornar EXATAMENTE este JSON, sem markdown, sem texto extra:
 {
-  "short_answer": "resposta direta em no máximo 20 palavras (ex: 'A alternativa correta é B. Sinartrose.' ou 'A capital do Brasil é Brasília.')",
+  "short_answer": "resposta direta em no máximo 20 palavras, com linguagem proporcional à confiança: se confidence >= 90 use afirmação direta ('A alternativa correta é B.'); se confidence entre 70-89 use 'Provavelmente a alternativa X, mas há incerteza.'; se confidence < 70 use 'Não é possível afirmar com segurança. Consulte um professor.'",
   "answer": "explicação completa e detalhada aqui, com o raciocínio e análise de cada opção se aplicável",
   "confidence": número entre 0 e 100,
   "sources": ["fonte1", "fonte2"],
@@ -18,11 +18,13 @@ Você DEVE retornar EXATAMENTE este JSON, sem markdown, sem texto extra:
 }
 
 CRITÉRIOS DE CONFIANÇA:
-- 95-100%: Fatos históricos comprovados, ciências exatas com resposta única, dados oficiais verificáveis
-- 80-94%: Informações bem documentadas, múltiplas fontes consistentes
-- 60-79%: Informações com alguma divergência entre fontes ou campo em evolução
-- 40-59%: Área controversa, poucos estudos, opiniões divergentes
-- 0-39%: Especulação, sem fontes confiáveis encontradas
+- 95-100%: Fato único e verificável, sem margem de dúvida
+- 80-94%: Bem documentado, múltiplas fontes consistentes
+- 60-79%: Questão incompleta, alternativas imprecisas ou ambíguas, ou divergência entre fontes
+- 40-59%: Área controversa, enunciado incompleto ou opções todas incorretas/parciais
+- 0-39%: Sem base suficiente para responder com segurança
+
+IMPORTANTE: Se o enunciado ou as alternativas parecerem incompletas ou mal formuladas, diga isso no answer e reduza o confidence proporcionalmente. Não invente uma "melhor opção" quando nenhuma está claramente correta.
 
 EXEMPLOS:
 - "Qual a capital do Brasil?" → confidence: 100, sources: ["Constituição Federal do Brasil", "IBGE"]
