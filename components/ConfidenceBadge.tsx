@@ -26,7 +26,7 @@ export default function ConfidenceBadge({ confidence, sources, label }: Confiden
       </div>
       {label && <div className="mt-0.5 opacity-80">{label}</div>}
       {sources && sources.length > 0 && (
-        <div className="mt-0.5 opacity-80">
+        <div className="mt-0.5 opacity-80 break-all">
           Fontes: {sources.join(', ')}
         </div>
       )}
