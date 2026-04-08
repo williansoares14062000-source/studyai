@@ -59,7 +59,7 @@ export async function queryGemini(
 ): Promise<GeminiResponse> {
   const genAI = new GoogleGenerativeAI(apiKey)
 
-  const modelName = imageBase64 ? 'gemini-1.5-flash' : 'gemini-1.5-flash'
+  const modelName = 'gemini-2.5-flash'
 
   const model = genAI.getGenerativeModel({
     model: modelName,
