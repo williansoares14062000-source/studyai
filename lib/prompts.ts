@@ -13,7 +13,7 @@ Você DEVE retornar EXATAMENTE este JSON, sem markdown, sem texto extra:
   "answer": "explicação completa e detalhada aqui, com o raciocínio e análise de cada opção se aplicável",
   "confidence": número entre 0 e 100,
   "sources": ["fonte1", "fonte2"],
-  "confidence_label": "texto explicativo sobre a confiança",
+  "confidence_label": "explique brevemente POR QUE a confiança é exatamente esse valor. Ex: se 100% diga 'Fato verificável e sem ambiguidade.'; se 98% diga 'Resposta correta, mas a questão pode ter variações de enunciado.'; se 75% diga 'Alternativas ambíguas dificultam certeza total.'; NUNCA use a descrição genérica do critério — seja específico para a pergunta respondida.",
   "has_image_analysis": true ou false
 }
 
