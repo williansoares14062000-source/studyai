@@ -6,9 +6,15 @@ import { BookOpen, Trash2 } from 'lucide-react'
 
 const STORAGE_KEY = 'study_assistant_messages'
 
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  return btoa(Array.from(new Uint8Array(buffer), b => String.fromCharCode(b)).join(''))
+}
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingLabel, setLoadingLabel] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -38,54 +44,73 @@ export default function ChatInterface() {
     }
   }
 
-  const handleSend = useCallback(async (text: string, imageFile?: File) => {
-    let imageBase64: string | undefined
-    let imageMimeType: string | undefined
-    let imageUrl: string | undefined
+  const callApi = async (question: string, imageBase64?: string, imageMimeType?: string) => {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, imageBase64, imageMimeType }),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Erro desconhecido')
+    return data
+  }
 
-    if (imageFile) {
-      imageMimeType = imageFile.type
-      imageUrl = URL.createObjectURL(imageFile)
-      const buffer = await imageFile.arrayBuffer()
-      imageBase64 = btoa(Array.from(new Uint8Array(buffer), b => String.fromCharCode(b)).join(''))
-    }
+  const handleSend = useCallback(async (text: string, imageFiles: File[]) => {
+    const imageUrls = imageFiles.map(f => URL.createObjectURL(f))
+    const hasImages = imageFiles.length > 0
+    const multipleImages = imageFiles.length > 1
 
+    // Add user message with all images
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      text: text || (imageFile ? 'Imagem enviada para análise' : ''),
-      imageUrl,
+      text: text || '',
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       timestamp: new Date(),
     }
-
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text, imageBase64, imageMimeType }),
-      })
+      if (!hasImages) {
+        // Text-only query
+        setLoadingLabel('Analisando...')
+        const data = await callApi(text)
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          text: data.answer,
+          shortAnswer: data.short_answer,
+          confidence: data.confidence,
+          sources: data.sources,
+          confidence_label: data.confidence_label,
+          timestamp: new Date(),
+        }
+        setMessages(prev => [...prev, assistantMessage])
+      } else {
+        // One API call per image, responses added individually
+        for (let i = 0; i < imageFiles.length; i++) {
+          const file = imageFiles[i]
+          const label = multipleImages ? `Imagem ${i + 1} de ${imageFiles.length}` : undefined
+          setLoadingLabel(multipleImages ? `Analisando imagem ${i + 1} de ${imageFiles.length}...` : 'Analisando imagem...')
 
-      const data = await response.json()
+          const imageBase64 = await fileToBase64(file)
+          const data = await callApi(text, imageBase64, file.type)
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro desconhecido')
+          const assistantMessage: Message = {
+            id: `${Date.now()}_${i}`,
+            role: 'assistant',
+            text: data.answer,
+            shortAnswer: data.short_answer,
+            imageLabel: label,
+            confidence: data.confidence,
+            sources: data.sources,
+            confidence_label: data.confidence_label,
+            timestamp: new Date(),
+          }
+          setMessages(prev => [...prev, assistantMessage])
+        }
       }
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        text: data.answer,
-        shortAnswer: data.short_answer,
-        confidence: data.confidence,
-        sources: data.sources,
-        confidence_label: data.confidence_label,
-        timestamp: new Date(),
-      }
-
-      setMessages(prev => [...prev, assistantMessage])
     } catch (error: any) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -97,6 +122,7 @@ export default function ChatInterface() {
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
+      setLoadingLabel('')
     }
   }, [])
 
@@ -138,7 +164,7 @@ export default function ChatInterface() {
             </p>
             <div className="mt-4 text-xs text-gray-400 space-y-1">
               <p>📝 Digite sua dúvida</p>
-              <p>📷 Envie um print ou foto da galeria</p>
+              <p>📷 Envie uma ou várias imagens da galeria</p>
               <p>📸 Tire uma foto com a câmera</p>
               <p>✅ Receba resposta com % de precisão</p>
             </div>
@@ -152,10 +178,15 @@ export default function ChatInterface() {
         {isLoading && (
           <div className="flex justify-start mb-2">
             <div className="bg-white rounded-lg rounded-tl-none px-4 py-3 shadow-sm">
-              <div className="flex gap-1 items-center">
-                <div className="w-2 h-2 bg-[#128C7E] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-[#128C7E] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-[#128C7E] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="flex gap-2 items-center">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-[#128C7E] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-[#128C7E] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-[#128C7E] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+                {loadingLabel && (
+                  <span className="text-xs text-gray-400">{loadingLabel}</span>
+                )}
               </div>
             </div>
           </div>
